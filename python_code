@@ -1,0 +1,1174 @@
+
+import sqlite3
+import PySimpleGUI as sg
+
+# connect to the DB (DATABASE SHOULD BE IN THE SAME DIRECTORY WITH THE CODE)
+con = sqlite3.connect('Project_2.db')
+cur = con.cursor()
+
+# print('Customers:')
+# for row in cur.execute('SELECT SSN FROM User WHERE SSN IN (SELECT SSN FROM Customers)'):
+#     print(row)
+
+#%%
+
+# global variables
+login_user_ssn = -1 
+login_user_name = -1
+login_user_type = -1
+available_scooter = -1
+available_offers = -1
+sc_id = -1
+ch_off_id = -1
+available_new_batteries = -1
+gl_bat_no = -1
+choose_loc = -1
+chosen_sc = -1
+block_c = -1
+n_ar = -1
+sct = -1
+
+# window login checks for SSN AND PASSWORD 
+def window_login():
+   
+    layout = [[sg.Text('Welcome to the IScooter System. Please enter your information.')],
+              [sg.Text('SSN:',size=(4,1)), sg.Input(size=(4,1), key='SSN')],
+              [sg.Text('Password:',size=(8,1)),sg.Input(size=(4,1),key='Password',password_char='*')],
+              [sg.Button('Login')],
+              [sg.Button('Exit' )]]
+    
+
+    return sg.Window('Login Window', layout)
+
+def window_verification_page(): #Tel no sor
+    layout = [[sg.Text('Enter your phone number for verification:', size=(40,1)), sg.Input( size=(6,1),key='entered_phone')],
+             [sg.Button('Verify')],
+             [sg.Button('Logout')]]
+
+    return sg.Window('Verification', layout)
+#Asks for TEL of customers
+def button_verify(values):
+    global window
+    phone = values['entered_phone']
+    if phone =='':
+            sg.popup('Phone number cannot be empty!')
+    else:
+        cur.execute('SELECT Phone_no FROM Customers WHERE SSN = ? and Phone_no = ?', (login_user_ssn, phone, ))
+        row_phone = cur.fetchone()
+        if row_phone is None:
+            sg.popup('Your phone number is unmatched, enter again.')
+        else:
+            window.close()
+            window = window_home()
+#Customer Home Page         
+def window_home():
+    u_balance = []
+    rented_ride = []
+    for row in cur.execute('SELECT ID FROM Scooter where CSSN=?', (login_user_ssn,)):
+        rented_ride.append(row)
+    
+    for row in  cur.execute('SELECT Balance FROM Customers where SSN=?', (login_user_ssn,)):
+        u_balance.append(row)
+    
+    if rented_ride == []:
+        layout = [[sg.Text('Welcome ' + login_user_name )],
+                  [sg.Text('Your current balance is ' + str(u_balance[0][0]))],
+                  [sg.Text('You are not using any scooter right now.')],
+                  [sg.Button('WALLET')],
+                  [sg.Button('Start Ride')],
+                  [sg.Button('Logout')]]
+    else:
+        
+        layout = [[sg.Text('Welcome ' + login_user_name )],
+                 [sg.Text('You are currently using: \n' + str(rented_ride))],
+                 [sg.Text('Your current balance is ' + str(u_balance[0][0]))],
+                 [sg.Button('WALLET')],
+                 [sg.Button('Start Ride')],
+                 [sg.Button('End Ride')], #buttonda popup çıksın, eğer ride varsa o ride ı bitirip cssn i nullasın, ride yoksa uyarı versin!!!
+                 [sg.Button('Logout')]]
+        
+    return sg.Window('Home Page', layout)
+
+
+def button_wallet(values):
+    global window
+    window.close()
+    window = window_wallet()
+    
+def button_start(values):
+    global window
+    cur.execute('SELECT Blocked_customers.SSN FROM Blocked_customers, Customers WHERE Blocked_customers.SSN = ? ', (login_user_ssn,))
+    blcked = cur.fetchone()
+    print(blcked)
+    if blcked is None:
+        window.close()
+        window = window_start()
+    else:
+        sg.popup('You are not allowed to rent a scooter!')
+        window.close()
+        window = window_home()
+    
+def button_end(values):
+    global window
+    # sg.popup('Your ride has finished! Thank you!')
+    # cur.execute('UPDATE Scooter SET CSSN = NULL WHERE ID = ?', (sc_id, ))
+    # #con.commit()
+    window.close()
+    window = window_end()
+    
+def button_ends(values):
+    global window
+    u = values['ridetoend']
+    sg.popup('Your ride has finished! Thank you!')
+    cur.execute('UPDATE Scooter SET CSSN = NULL WHERE ID = ?', (u[0][0], ))
+    con.commit()
+    window.close()
+    window = window_home()
+    
+def window_end():
+
+    used = []
+    for row in cur.execute('SELECT ID FROM Scooter WHERE CSSN=?',(login_user_ssn,)):
+        used.append(row)
+        
+        
+    layout = [[sg.Text('Pick one ride to end\n')],
+              [sg.Listbox(used,size =(20,len(used)),key='ridetoend')],
+              [sg.Button('End Scooter')],
+              [sg.Button('Return to Customer Menu')]]
+    
+    return sg.Window('End',layout)
+    
+    
+
+def window_wallet():
+     # WALLET BUTONUNA BASTIKTAN SONRA BUTTONDA BALANCE QUERYİSİ YAPIP GLOBALE AKTARALIM BURADA DA GÖSTERELİM
+    u_balance = []
+    
+    for row in  cur.execute('SELECT Balance FROM Customers where SSN=?', (login_user_ssn,)):
+        u_balance.append(row)
+    
+    layout = [[sg.Text('Your current balance is:' + str(u_balance[0][0]))],
+             [sg.Button('Add Balance')],
+             [sg.Button('Return to Customer Menu')],
+             [sg.Button('Logout')]]
+
+    return sg.Window('Verification', layout)
+    
+def button_add_balance(values):
+    global window
+    window.close()
+    window = window_payment()
+
+def window_payment():
+# here, user chooses which available credit_card ,which they already declared before,to make the payment with
+    cards = []
+    for row in cur.execute('SELECT Cardno, Name_on_the_card FROM hasCard WHERE SSN = ?', (login_user_ssn,)):
+        cards.append(row)
+    para =(10, 20, 50, 100)
+    # print(cards)
+    # print(type(para))
+    layout =   [[sg.Text('Payment \n')],
+               [sg.Combo(cards, size=(50, len(cards)), key='chosen_card')],
+               [sg.Combo(para, size = (20,len(para)), key = 'chosen_para')], #CHOSEN PARAYI BALANCE A EKLE (FİNİSH PAYMENTTA)
+               [sg.Button('Finish Payment')],
+               [sg.Button('Return to Wallet')],
+               [sg.Button('Return to Customer Menu')],
+               [sg.Button('Logout')]]
+    return sg.Window('Payment Window', layout)
+
+def window_start():
+    #find the available locations
+    locations = []
+  
+    for row in cur.execute('SELECT Location FROM Scooter WHERE CSSN IS NULL and Scooter.ID NOT IN (Select SID FROM Repair) '):
+        if row[0] not in locations:
+            locations.append(row[0])
+        
+    print(locations)
+    layout = [[sg.Text('Available locations \n')],            
+             [sg.Listbox(locations, size=(15, len(locations)), key='chosen_location')],
+             [sg.Button('Continue')],
+             [sg.Button('Return to Customer Menu')],
+             [sg.Button('Logout')]]
+
+    return sg.Window('Customer Window', layout)
+
+def button_continue(values):
+    global available_scooter
+    global window
+    loc = values['chosen_location']
+    print(loc)
+    avscooter = []
+    
+    if loc == []:
+        sg.popup('Location cannot be empty!')
+    else:
+        for row in cur.execute('SELECT Scooter.ID FROM Scooter WHERE Location = ? and CSSN IS NULL and Scooter.ID NOT IN (SELECT SID From Repair)' , (loc[0],)):
+            avscooter.append(row[0])
+            # this is some available scooter, let's keep the ID of this scooter in the global variable
+        available_scooter = avscooter
+        print(available_scooter)
+        window.close()
+        window = window_scooters()   
+#here user can choose the available scooter in the location
+
+
+def window_scooters():
+    
+     layout = [[sg.Text('Available scooters in your location \n')],
+               [sg.Combo(available_scooter, size=(15, len(available_scooter)), key='chosen_scooter')],
+               [sg.Button('Rent')],
+               [sg.Button('Return to Customer Menu')],
+               [sg.Button('Logout')]]
+     return sg.Window('Available Scooters', layout)
+
+def button_rent(values):
+    global window
+    global sc_id
+    global available_offers
+    avoffers = []
+    sid = values['chosen_scooter']
+    
+    if sid == '':
+        sg.popup('You did not choose any scooter.')
+    else:
+        sc_id = sid
+        for row in cur.execute('SELECT Offer_ID, Discount FROM Offer WHERE CSSN= ?', (login_user_ssn,)):
+            avoffers.append(row[0:2])
+            
+        available_offers = avoffers
+        if available_offers == []:
+            u_balance = []
+            for row in  cur.execute('SELECT Balance FROM Customers where SSN=?', (login_user_ssn,)):
+                u_balance.append(row)
+            u_balance = u_balance[0][0]
+            if u_balance >= 20 :
+                Blnc = u_balance - 20
+                cur.execute('UPDATE Customers SET Balance= ? WHERE SSN = ?', (Blnc,login_user_ssn, ))
+                cur.execute('UPDATE Scooter SET CSSN = ? WHERE ID = ?', (login_user_ssn, sc_id,))
+                
+                sg.popup('Your ride has started! Have fun!')
+                con.commit()
+                window.close()
+                window = window_home()
+            else:
+                sg.popup('Your balance is insufficient, please transfer some money into your wallet.')
+
+                window.close()
+                window = window_home()
+        else:   
+            window.close()
+            window = window_offer()
+ 
+#if the user has available offers(coupons), they asked to whether or not to use their coupon
+def window_offer():
+    
+    layout = [[sg.Text('Do you want to use your available coupons \n')],
+               [sg.Combo(available_offers, size=(15, len(available_offers)), key='chosen_offer')],
+               [sg.Button('Yes, I want.')],
+               [sg.Button("No, I don't want to use.")],
+               [sg.Button('Logout')]]
+    return sg.Window('Offer_Window', layout)
+
+def button_yes_offer(values):
+    global window
+    global ch_off_id
+    offer_chosen = values['chosen_offer']
+    print(offer_chosen[0])
+    u_balance = []
+    for row in  cur.execute('SELECT Balance FROM Customers where SSN=?', (login_user_ssn,)):
+        u_balance.append(row)
+    u_balance = u_balance[0][0]
+    if offer_chosen == '':
+        sg.popup('You should choose an offer first!')
+    else:   
+        off_percentage = values['chosen_offer'][1]
+        ch_off_id = values['chosen_offer'][0]
+        sg.popup('Your ', off_percentage ,' % discount is confirmed')
+        temp = 20.0*(1.0-off_percentage*0.01)
+        if u_balance >= temp :
+            #20 TL SAATLİK ÜCRET
+            Blnc = u_balance - temp
+            cur.execute('UPDATE Customers SET Balance= ? WHERE SSN = ?', (Blnc,login_user_ssn, ))
+            cur.execute('UPDATE Scooter SET CSSN = ? WHERE ID = ?', (login_user_ssn, sc_id,))
+            cur.execute('DELETE FROM Offer Where Offer_ID =? ', (offer_chosen[0],))
+            sg.popup('Your ride has started! Have fun!')
+            con.commit()
+            window.close()
+            # OFFER SİL
+            
+            window = window_home()
+        else:
+            sg.popup('Your balance is insufficient, please transfer some money into your wallet.')
+            
+        window.close()
+        window = window_home()
+
+def button_no_offer(values):
+    global window
+    u_balance = []
+    for row in  cur.execute('SELECT Balance FROM Customers where SSN=?', (login_user_ssn,)):
+        u_balance.append(row)
+    u_balance = u_balance[0][0]
+    
+    if u_balance >= 20 :
+        Blnc = u_balance - 20
+        cur.execute('UPDATE Customers SET Balance= ? WHERE SSN = ?', (Blnc,login_user_ssn, ))
+        cur.execute('UPDATE Scooter SET CSSN = ? WHERE ID = ?', (login_user_ssn, sc_id,))
+        sg.popup('Your ride has started! Have fun!')
+        con.commit()
+        window.close()
+        window = window_home()
+    else:
+        sg.popup('Your balance is insufficient, please transfer some money into your wallet.')
+    window.close()
+    window = window_home()
+
+
+
+def button_ret_wallet(values):
+    global window
+    window.close()
+    window = window_wallet()
+def button_ret_chome(values):
+    global window
+    window.close()
+    window = window_home()
+
+
+def button_login(values):
+    
+    global login_user_ssn
+    global login_user_name
+    global login_user_type
+    global window
+    
+    ussn = values['SSN']
+    passw = values['Password']
+    
+    if ussn == '' or passw == '':
+        sg.popup('SSN or Password cannot be empty!')
+        
+    else:
+        cur.execute('SELECT SSN, Name FROM User WHERE SSN = ?', (ussn,))
+        row = cur.fetchone()
+        
+        if row is None:
+            sg.popup('SSN is wrong!')
+            
+        cur.execute('SELECT Password FROM User WHERE SSN = ? and Password = ?', (ussn,passw,))
+        col = cur.fetchone()
+        print(col)
+ 
+        if col is None:
+            sg.popup('Wrong Password!')
+        else:
+
+            login_user_ssn = row[0]
+            
+            login_user_name = row[1]
+
+            cur.execute('SELECT SSN FROM Customers WHERE SSN = ?', (ussn,))
+            row_customer = cur.fetchone()
+            
+            if row_customer is None:
+                
+                cur.execute('SELECT SSN FROM Managers WHERE SSN = ?', (ussn,))
+                row_manager = cur.fetchone()
+                if row_manager is None:
+
+                    cur.execute('SELECT SSN FROM Workers WHERE SSN = ?', (ussn,))
+                    row_worker = cur.fetchone()
+                    if row_worker  is None:
+                        sg.popup('User type error! Please contact the admin.')
+                    else:
+                        #this is a worker
+                        login_user_type = 'Workers'
+                        sg.popup('Welcome, ' + login_user_name)
+                        window.close()
+                        window = window_workers()
+                
+                else:
+                    # this is a managers
+                    login_user_type = 'Managers'
+                    sg.popup('Welcome, ' + login_user_name + ' (Manager)!')
+                    window.close()
+                    # window = window_login()
+                    window = window_managers()
+            else:
+                # this is a customer
+                login_user_type = 'Customers'
+                window.close()
+                window = window_verification_page()
+                
+
+def button_finish(values):
+    global window
+    global balance
+    u_balance = []
+    for row in  cur.execute('SELECT Balance FROM Customers where SSN=?', (login_user_ssn,)):
+        u_balance.append(row)
+        
+    chsn_bal = values['chosen_para']
+    print(type(chsn_bal))
+    print(type(u_balance[0]))
+    balance = chsn_bal + u_balance[0][0]
+    if values['chosen_card'] == '':
+        sg.popup('You should choose a credit card first.')
+    
+    else:
+
+        cur.execute('UPDATE Customers SET Balance= ? WHERE SSN= ?', (balance , login_user_ssn, ))
+        con.commit()
+        sg.popup('Your payment is received! Thank you for the ride!')
+        window.close()
+        window = window_home()
+
+##################################################################################
+#window for workers
+def window_workers():
+    
+    layout = [[sg.Text('Welcome ' + login_user_name )],
+                  [sg.Text('Choose your status')],
+                  [sg.Button('Repairer')],
+                  [sg.Button('Charger')],
+                  [sg.Button('Logout')]]
+        
+    return sg.Window('Home Page', layout)
+
+
+def button_charger(values):  #CHECK IF IT IS CHARGER
+    global window
+    
+    cur.execute('SELECT SSN FROM Chargers WHERE SSN = ?', (login_user_ssn,))
+    row_charger = cur.fetchone()
+    if row_charger is None:
+        sg.popup('This dude is not a Charger')
+    else:
+        window.close()
+        window = window_charger()
+    
+def button_repairer(values):  #CHECK IF IT IS REPAIRER
+    global window
+    
+    cur.execute('SELECT SSN FROM Repairers WHERE SSN = ?', (login_user_ssn,))
+    row_repairer = cur.fetchone()
+    if row_repairer is None:
+        sg.popup('This dude is not a Repairer')
+    else:
+        window.close()
+        window = window_area_repairer()
+        
+def window_charger():
+    #find the low battery scooters
+    low_battery_sc = []
+    for row in cur.execute('SELECT Scooter.ID FROM Scooter, Chargers, Area WHERE Scooter.Battery_Level <= 25 AND Chargers.Areaid = Area.Areaid and Scooter.Location = Area.Area_name AND Chargers.SSN = ?', (login_user_ssn,)):
+        if row not in low_battery_sc:
+            low_battery_sc.append(row)
+    print(low_battery_sc)
+    if low_battery_sc == []:
+        """
+        EĞER EKSTRA İŞE OKAYSENİZ BURAYA REQUEST FOR RELOCATİON GİBİ BİR ŞEY ATIP MANAGER A BAĞLAYIP 
+        MANAGERDAN AREASINI DEĞİŞTİRME REQUESTİNİ DEĞERLENDİREBİLİRİZ!!!
+        """
+        layout = [[sg.Text('There are no low battery scooter in your area!\n')],
+                  [sg.Button('Return to Worker Menu')],
+                  [sg.Button('Logout')]] 
+    else:
+        layout = [[sg.Text('Choose the low battery scooter to charge \n')],
+                 [sg.Listbox(low_battery_sc, size=(15, len(low_battery_sc)), key='chosen_low_scooter')],
+                 [sg.Button('Next')],
+                 [sg.Button('Return to Worker Menu')],
+                 [sg.Button('Logout')]]
+
+    return sg.Window('Charger Window', layout)
+
+def button_next(values):
+    global window
+    global chosen_sc
+    chosen_sc = values['chosen_low_scooter']
+    print(chosen_sc)
+    if chosen_sc == []:
+        sg.popup('You should choose a scooter first!')
+    else:
+        sg.popup('Scooter successfully chosen!')
+        window.close()
+        window = window_bat_request()   
+
+def window_bat_request():
+    
+    full_batteries = []
+    for row in cur.execute('SELECT Part_No FROM Battery WHERE Charge = 100'):
+        if row not in full_batteries:
+            full_batteries.append(row)
+    
+    layout = [[sg.Text('These are the available batteries in the warehouse \n')],
+             [sg.Text('Choose one of them')],
+             [sg.Listbox(full_batteries, size=(15, len(full_batteries)), key='chosen_full_battery')],
+             [sg.Button('Request')],
+             [sg.Button('Return to Worker Menu')],
+             [sg.Button('Logout')]]
+
+    return sg.Window('Battery Request Window', layout)
+    
+
+def button_bat_request(values):
+    global window
+    global available_new_batteries
+    bat_no = values['chosen_full_battery']
+    print('bat_no',bat_no)
+    
+    if bat_no == []:
+        sg.popup('You did not choose any new battery.')
+    else:
+        cur.execute('UPDATE Parts SET quantity = quantity - 1 WHERE quantity > 0 and Part_No =?', (bat_no[0][0],))
+        cur.execute('UPDATE Scooter SET Battery_Level = 100 WHERE  ID =?', (chosen_sc[0][0],))
+        sg.popup('You charged selected scooter with new battery '+ bat_no[0][0] + ' !')
+        con.commit()
+        window.close()
+        window = window_charger()
+
+def window_area_repairer():
+    
+    dmg_loc = []
+    for row in cur.execute('SELECT Scooter.Location FROM Scooter, Repair WHERE Scooter.ID = Repair.SID and Repair.RSSN =?',(login_user_ssn,)):
+        if row not in dmg_loc:
+            dmg_loc.append(row)
+    if dmg_loc == []:
+        sg.popup('There are no scooters for you to repair!')
+        layout = [[sg.Text('Location Information\n')],
+                  [sg.Button('Return to Worker Menu')],
+                  [sg.Button('Logout')]]
+        
+    else:
+        layout = [[sg.Text('Location Information\n')],
+                 [sg.Text('Choose one of them')],
+                 [sg.Listbox(dmg_loc, size=(15, len(dmg_loc)), key='chosen_loc_repair')],
+                 [sg.Button('Pick Area')],
+                 [sg.Button('Return to Worker Menu')],
+                 [sg.Button('Logout')]]
+    
+    return sg.Window('Choose Location to Repair',layout)
+
+def button_pick_area(values):
+    global choose_loc
+    global window
+    choose_loc = values['chosen_loc_repair']
+    print(choose_loc)
+    if choose_loc == [] :
+        sg.popup('You should choose a location!')
+    else:
+        sg.popup('Location is chosen!')
+
+        window.close()
+        window = window_repairer()
+                     
+def window_repairer():
+    
+    damaged_sc = []
+    for row in cur.execute('SELECT SID FROM Repair WHERE RSSN = ?', (login_user_ssn,)):
+        if row not in damaged_sc:
+            damaged_sc.append(row)
+        
+    layout = [[sg.Text('Choose the damaged scooter to repair \n')],
+             [sg.Listbox(damaged_sc, size=(15, len(damaged_sc)), key='chosen_dmg_scooter')],
+             [sg.Button('Pick')],
+             [sg.Button('Return to Worker Menu')],
+             [sg.Button('Logout')]]
+
+    return sg.Window('Damaged Scooters', layout, size = (300,200))
+
+def button_pick(values):
+    global window
+    global sct
+    sct = values['chosen_dmg_scooter']
+    print(sct)
+    print(sct[0])
+    
+    if sct == []:
+        sg.popup('You did not choose any scooter!')
+    else:
+        sg.popup('Scooter chosen successfully!')
+        window.close()
+        window = window_request()
+    
+def window_request():
+    parts = []
+    for row in cur.execute('SELECT Part_No FROM Parts WHERE RSSN = ? AND quantity > 0', (login_user_ssn,)):
+        parts.append(row)
+        
+    if parts == []:
+        layout = [[sg.Text('There are no parts available in warehouse for you!, contact to your manager.')]
+             [sg.Button('Return to Worker Menu')],
+             [sg.Button('Logout')]]
+        
+    else:
+        layout = [[sg.Text('Choose parts to request \n')],
+             [sg.Listbox(parts, size=(15, len(parts)), key='chosen_parts')],
+             [sg.Text('Number:',size=(6,1)), sg.Input(size=(4,1), key='number')],
+             [sg.Button('Request Part')],
+             [sg.Button('Return to Worker Menu')],
+             [sg.Button('Logout')]]
+
+    return sg.Window('Request Required Parts',layout, size= (300,200))
+
+def button_request_part(values):
+    global window
+    part = values['chosen_parts']
+    print(part)
+    if part == []:
+        sg.popup('You did not choose any part!')
+    else:
+        amount = []
+        for row in cur.execute('SELECT quantity FROM Parts WHERE Part_No=?',(part[0][0],)):
+            amount.append(row)
+        
+        amount = amount[0][0]
+        requested_amount = values['number']
+        if requested_amount == '' or requested_amount == '0':
+            sg.popup('Amount can not be empty or 0!')
+            
+        else:
+            items_left = int(amount)-int(requested_amount)
+            if int(amount) < int(requested_amount):
+                    sg.popup('There are not enough parts in the warehouse! \n Maximum amount available:', amount)
+                    1
+            else:
+                    sg.popup('Parts are ordered! \n Repair Completed!')
+                    cur.execute('UPDATE Parts SET quantity=? WHERE Part_No=?',(items_left,part[0][0],))
+                    cur.execute('DELETE From Repair WHERE RSSN = ? and SID=?', (login_user_ssn, sct[0][0],))
+                    con.commit()
+                    window.close()
+                    window = window_request()
+
+def button_ret_whome(values):
+    global window
+    window.close()
+    window = window_workers()
+########################################################################################3
+#window for managers
+def window_managers():
+    
+    layout = [[sg.Text('Welcome ' + login_user_name)],
+             [sg.Button('View Repairers'),sg.Button('View Chargers')],
+             [sg.Button('Add New Areas')],
+             [sg.Button('Block Customers')],
+             [sg.Button('Warehouse')],
+             [sg.Button('Offers')],
+             [sg.Button('Logout')]]
+
+    return sg.Window('Manager Window', layout)
+
+def button_view_repairers(values):
+    global window
+    window.close()
+    window = window_repairers()
+
+def button_view_chargers(values):
+    global window
+    window.close()
+    window = window_view_chargers()
+def button_add_new_areas(values):
+    global window
+    window.close()
+    window = window_areas()
+
+def button_block_view(values):
+    global window
+    window.close()
+    window = view_Block()
+
+def button_warehouse(values):
+    global window
+    window.close()
+    window = window_warehouse()
+def button_view_offers(values):
+    global window
+    window.close()
+    window = window_mng_offer()
+
+def window_repairers():
+    Busy = []
+    for row in cur.execute('SELECT RSSN FROM Repair WHERE RSSN IS NOT NULL'):
+        Busy.append(row)
+    Idle = []
+    for row in cur.execute('SELECT SSN FROM Repairers WHERE SSN NOT IN (SELECT RSSN FROM Repair WHERE RSSN IS NOT NULL)'):
+        Idle.append(row)
+    # print(Idle)
+    broken_sc = []
+    for row in cur.execute('SELECT SID FROM Repair WHERE RSSN IS NULL'):
+        broken_sc.append(row)
+    layout = [[sg.Text('Busy Repairers:')],
+              [sg.Listbox(Busy, size= (15,len(Busy)))],
+              [sg.Text('Idle Repairers:')],
+              [sg.Listbox(Idle, size= (15,len(Idle)))],
+              [sg.Text('Choose Idle Repairer to assign:')],
+               [sg.Combo(Idle, size=(15, len(Idle)), key='chosen_repairer')],
+               [sg.Text('Choose Scooter to repaired:')],
+               [sg.Combo(broken_sc, size=(15, len(broken_sc)), key='chosen_sc')],
+               [sg.Button('Assign')],
+               [sg.Button('Return to Manager Page')],
+               [sg.Button('Logout')]]
+    
+    return sg.Window('Repairer View', layout)
+
+def button_assign(values):
+    global window
+    
+    chosen_rep = values['chosen_repairer']
+
+    chosen_sc = values['chosen_sc']
+
+    if chosen_rep == '':
+        sg.popup('Choose a repairer first!')
+    else:
+        if chosen_sc == '':
+            sg.popup('Choose a scooter first!')
+        else:
+            cur.execute('UPDATE Repair SET RSSN = ? WHERE SID =? ', (chosen_rep[0], chosen_sc[0], ))
+            sg.popup('Scooter {} is assigned to repairer {}'.format(str(chosen_sc[0]), str(chosen_rep[0])))
+            #con.commit()
+            window.close()
+            window = window_repairers()
+        
+
+def window_view_chargers():
+    busy_ch = []    
+    for row in cur.execute('Select ChSSN FROM chargebattery'):
+        busy_ch.append(row)
+    idle_ch = []
+    for row in cur.execute("""SELECT SSN From 
+                           Chargers where SSN Not in (Select ChSSN FROM chargebattery where ChSSN IS NOT NULL)"""):
+        idle_ch.append(row)
+    area = []
+    for row in cur.execute('SELECT Area_name FROM Area '):
+        if row not in area:
+            area.append(row)
+    layout = [[sg.Text('Busy Chargers:')],
+              [sg.Listbox(busy_ch, size = (15,len(busy_ch)))],
+              [sg.Text('Idle Chargers:')],
+              [sg.Listbox(idle_ch, size = (15,len(idle_ch)))],
+              [sg.Text("Change Charger's area")],
+              [sg.Combo(idle_ch, size=(15, len(idle_ch)), key='chosen_charger')],
+              [sg.Text('Choose Area:')],
+              [sg.Combo(area, size = (15,len(area)), key ='chosen_area')],
+              [sg.Button('Change Area')],
+              [sg.Button('Return to Manager Page')],
+              [sg.Button('Logout')]]
+    
+    return sg.Window('Charger View', layout, size = (250,450))
+
+def button_charger_area(values):
+    global window
+    chosen_ch = values['chosen_charger']
+    chosen_ar = values['chosen_area']
+    print(chosen_ch)
+    print(chosen_ar)
+    if chosen_ch == '':
+        sg.popup('You should choose a charger first!')
+    else:
+        if chosen_ar == '':
+            sg.popup('You should choose an area first!')
+        else:
+            a = cur.execute('SELECT Area_name FROM Area where Areaid = (Select Areaid from Chargers WHERE SSN = ?)', (chosen_ch[0],))
+            a = a.fetchone()
+            print('a', a)
+            if chosen_ar[0] == a[0]:
+                sg.popup('Charger is already in this area, choose another!')
+            else:
+                areaid = cur.execute('SELECT Areaid FROM Area WHERE Area_name = ?', (chosen_ar[0],))
+                areaid = areaid.fetchone()
+                print(areaid)
+                print('chosen',chosen_ar[0])
+                print(chosen_ch[0])
+                order = cur.execute('SELECT * FROM Assign ORDER BY AssignmentOrder DESC')
+                order = order.fetchone()
+                print(order[0])
+                #Delete the last order given to the charger
+                cur.execute('DELETE From Assign where ChSSN=? ', (chosen_ch[0],))
+                new_order = order[0] + 1
+                print(new_order)
+                cur.execute('INSERT INTO Assign VALUES(?,?,?,?)', (new_order,login_user_ssn, chosen_ch[0],areaid[0] ,))
+                cur.execute('UPDATE Chargers SET Areaid = ? WHERE SSN = ?', (areaid[0],chosen_ch[0],))
+                con.commit()
+                sg.popup("Charger's area is changed successfully!")
+                window.close()
+                window = window_view_chargers()
+
+
+def view_Block():
+    
+    customers = []
+    for row in cur.execute('SELECT User.SSN, User.Name, User.Surname FROM User, Customers WHERE Customers.SSN = User.SSN'):
+        customers.append(row)
+    
+    layout = [[sg.Text('Customers:')],
+               [sg.Listbox(customers, size=(15, len(customers)))],
+               [sg.Text('Change Block Status of the Customer:')],
+               [sg.Combo(customers, size=(15,len(customers)), key = 'chosen_b_customer')],
+               [sg.Button('Block')],
+               [sg.Button('View Blocked Customers')],
+               [sg.Button('Return to Manager Page')],
+               [sg.Button('Logout')]]
+    
+    return sg.Window('Block Window', layout)
+
+def button_block(values):
+    global window
+    global block_c
+    block_c = values['chosen_b_customer']
+    print('Block',block_c)
+    if block_c == '':
+        sg.popup('You did not choose any customer')
+    else:
+        window.close()
+        window = sure_window()
+def sure_window():
+    layout = [[sg.Text('Do you want to block this user?')], 
+               [sg.Button('YES'), sg.Button('NO')]]
+             
+    return sg.Window('Sure?', layout)
+
+def button_yes(values):
+    global window
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Blocked_customers'")
+    tablecheck = cur.fetchone()
+    if tablecheck is None:
+        cur.execute('CREATE TABLE Blocked_customers(SSN CHAR(20))')
+        cur.execute('INSERT INTO Blocked_customers VALUES(?)', (block_c[0],))
+        sg.popup('Blocked Customer Table is created!')
+        sg.popup('Customer is blocked!')
+    else:
+        cur.execute('SELECT SSN FROM Blocked_customers where SSN = ?', (block_c[0],))
+        check_blocked = cur.fetchone()
+    
+        if check_blocked is None: #eğer blocklu değilse ve table varsa burada blockluyor
+            cur.execute('INSERT INTO Blocked_customers VALUES(?)', (block_c[0],))
+            sg.popup('Customer is blocked!')
+        else:
+            sg.popup('This customer is already blocked!')
+            
+    con.commit()   
+    window.close()
+    window = view_Block()
+        
+def button_no(values):
+    global window
+    window.close()
+    window = view_Block()
+
+def button_view_blocked(values):
+    global window
+    window.close()
+    window = blocked_customers_window()
+
+def blocked_customers_window():
+    blocked_c = []
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Blocked_customers'")
+    check_table = cur.fetchone()
+    if check_table  is None:
+        layout = [[sg.Text('There is no blocked customer!')],
+               
+               [sg.Button('Return to Manager Page')],
+               [sg.Button('Logout')]]
+    else:
+        
+        for row in cur.execute('Select * FROM Blocked_customers'):
+            blocked_c.append(row)
+        if blocked_c == []: #We need this if because if there was a blocked customer once, table was created, and 
+            # if this customer is unblocked later, table still exists but empty.
+            layout = [[sg.Text('There is no blocked customer!')],
+                      [sg.Button('Return to Manager Page')],
+                      [sg.Button('Logout')]]
+        else:
+            layout = [[sg.Text('Blocked Customers:')],
+                      [sg.Listbox(blocked_c, auto_size_text =True)],
+                      [sg.Text('Choose to Unblock Customer:')],
+                      [sg.Combo(blocked_c, auto_size_text = True, key ='unblock_c')],
+                      [sg.Button('Unblock')],
+                      [sg.Button('Return to Manager Page')],
+                      [sg.Button('Logout')]]
+        
+    return sg.Window('Block Window', layout)
+
+def button_unblock(values):
+    global window
+    unblock_c = values['unblock_c']
+    print('unb', unblock_c)
+    if unblock_c == '':
+        sg.popup('Choose a customer SSN to unblock')
+    else:
+    
+        cur.execute('DELETE From Blocked_customers where SSN=?', (unblock_c[0],))
+        con.commit()
+        sg.popup('Customer is unblocked!')
+        window.close()
+        window = blocked_customers_window()
+
+
+
+def window_warehouse():
+    parts = []
+    for row in cur.execute('SELECT Part_No, pname, quantity FROM Parts'):
+        parts.append(row)
+    print(parts)
+    print([i[0] for i in parts])
+   
+    layout = [[sg.Text('Parts available in the warehouse (Part_no, Name, Quantity)')],
+              [sg.Listbox(parts, auto_size_text = True)],
+              [sg.Text('Choose Part to be ordered:')],
+               [sg.Combo([i[0] for i in parts], size=(15,len(parts)), key='chosen_part')],
+               [sg.Text('Amount:', size= (6,1)), sg.Input(size=(4,1), key = 'chosen_amount')],
+               [sg.Button('Order')],
+               [sg.Button('Return to Manager Page')],
+               [sg.Button('Logout')]]
+    
+    return sg.Window('Warehouse Window', layout)
+
+def button_orderparts(values):
+    global window
+    bos =[]
+    ch_part = values['chosen_part']
+    ch_amount = values['chosen_amount']
+    print('ch',ch_part)
+    print(ch_amount)
+    if ch_part == '':
+        sg.popup('You did not choose any part!')
+    else:
+        if ch_amount == '':
+            sg.popup('You did not choose amount')
+        else:
+            if float(ch_amount) <= 0 or float(ch_amount) != round(float(ch_amount)) :
+                sg.popup('The amount cannot be less than 0 or must be an integer number.')
+            else:
+                cur.execute('UPDATE Parts SET quantity = quantity + ? WHERE Part_No = ?', (ch_amount, ch_part,))    
+                for row in cur.execute('SELECT quantity FROM Parts WHERE Part_No =?', (ch_part,)):
+                    print(row)
+                    bos.append(row[0])
+                
+                con.commit()
+                sg.popup('Parts ordered! Current amount is ', bos[0])
+                window.close()
+                window = window_warehouse()
+            
+def window_areas():
+    
+    layout = [[sg.Text('You can add new areas in this page')],
+              [sg.Text('Type the name of the new area', auto_size_text= True), sg.Input(size=(20,1),key= 'new_area')],
+              [sg.Button('Add Area')],
+              [sg.Button('Return to Manager Page')],
+              [sg.Button('Logout')]]
+        
+    return sg.Window('Add Area', layout)        
+
+def button_add_area(values):
+    global window
+    global n_ar
+    n_ar = values['new_area']
+    if n_ar == '':
+        sg.popup('You should enter the name of the area')
+    else:
+        exists = []
+        for row in cur.execute('SELECT Area_name FROM Area'):
+            exists.append(row[0])
+        print(exists)
+        if n_ar in exists:
+            sg.popup('There is an area with the same name!')
+            window.close()
+            window = window_still_add()
+        else:
+            cur.execute('INSERT INTO Area(Area_name) VALUES(?)', (n_ar,))
+            sg.popup('Area is successfully added to database!')
+            con.commit()
+            window.close()
+            window = window_areas()
+                
+def window_still_add():
+    layout = [[sg.Text('Do you still want to add this area?')], 
+               [sg.Button('Yes, add.'), sg.Button('No, return.')]]
+             
+    return sg.Window('Still Add?', layout)
+  
+def button_area_yes(values):
+    global window
+    cur.execute('INSERT INTO Area(Area_name) VALUES(?)', (n_ar,))
+    con.commit()
+    sg.popup('Area is successfully added to database!')
+    window.close()
+    window = window_areas()
+
+def button_area_no(values):
+    global window
+    
+    sg.popup('Area is not added!')
+    window.close()
+    window = window_areas()
+  
+def window_mng_offer():
+    
+    offers = []
+    for row in cur.execute('SELECT CSSN, Discount FROM Offer WHERE MSSN = ?', (login_user_ssn,)):
+        offers.append(row)
+    
+    layout = [[sg.Text('These are the offers you made to customers (Customer SSN, Discount)')],
+              [sg.Listbox(offers, size=(20,len(offers)))],
+              [sg.Button('Add New Offers')],
+              [sg.Button('Return to Manager Page')],
+              [sg.Button('Logout')]]
+    return sg.Window('Manage Offers', layout)      
+
+def button_add_offers(values):
+    global window
+    window.close()
+    window = window_add_offers()
+    
+def window_add_offers():
+    customers = []
+    for row in cur.execute('SELECT User.SSN, Name, Surname FROM User, Customers WHERE Customers.SSN = User.SSN'):
+        customers.append(row)
+        
+    layout = [[sg.Text('Choose the customer to offer:')],
+              [sg.Combo(customers, auto_size_text=True, key ='chosen_cust')],
+              [sg.Text('Amount of Discount (Between 0-100%):', auto_size_text=True), sg.Input(size=(4,1),key= 'ent_discount')],
+              [sg.Button('Create Offer')],
+              [sg.Button('Return to Manager Page')],
+              [sg.Button('Logout')]]
+    return sg.Window('Add Offer', layout)     
+
+def button_add_offercs(values):
+    global window
+    customer = values['chosen_cust']
+    disc_amount = values['ent_discount']
+    offers =[]
+    for row in cur.execute('SELECT Offer_ID FROM Offer '):
+        offers.append(int(row[0]))
+    new_id = max(offers) +1
+    if customer == []:
+        sg.popup('You should choose a customer first!')
+    else:
+        if disc_amount == '' or disc_amount =='0':
+            sg.popup('Amount cannot be empty or 0!')
+        else:
+            cur.execute('INSERT INTO Offer(Offer_ID, Discount, CSSN, MSSN) VALUES(?,?,?,?)', (new_id,float(disc_amount), customer[0], login_user_ssn,))
+            sg.popup('You offer for customer {} with discount {} % is created'.format(customer[0], disc_amount))
+            con.commit()
+            window.close()
+            window = window_mng_offer()
+
+
+def button_return_manager(values):
+    global window
+    window.close()
+    window = window_managers()
+window = window_login()       
+
+while True:
+    event, values = window.read()
+    if event == 'Login':
+        button_login(values)
+    elif event == 'Verify':
+        button_verify(values)
+    elif event == 'Return to Customer Menu':
+        button_ret_chome(values)
+    elif event == 'Return to Wallet':
+        button_ret_wallet(values)
+
+    elif event == 'WALLET':
+        button_wallet(values)
+    elif event == 'Start Ride':
+        button_start(values)
+    elif event == 'End Ride':
+        button_end(values)
+    elif event == 'Add Balance':
+        button_add_balance(values)
+    elif event == 'Continue':
+        button_continue(values)
+    elif event == 'Rent':
+        button_rent(values)
+    elif event == 'Yes, I want.':
+        button_yes_offer(values) 
+    elif event == "No, I don't want to use.":
+        button_no_offer(values)
+    elif event == 'Finish Payment':
+        button_finish(values) 
+    elif event == 'Repairer':
+        button_repairer(values)
+    elif event == 'Charger':
+        button_charger(values)
+    elif event == 'Next':
+        button_next(values)
+    elif event == 'Return to Worker Menu':
+        button_ret_whome(values)
+    elif event == 'Request':
+        button_bat_request(values)
+    elif event == 'Pick Area':
+        button_pick_area(values)
+    elif event == 'Pick':
+        button_pick(values)
+    elif event == 'Request Part':
+        button_request_part(values)
+    elif event == 'View Repairers':
+        button_view_repairers(values)
+    elif event == 'View Chargers':
+        button_view_chargers(values)
+    elif event == 'Block Customers':
+        button_block_view(values) 
+    elif event == "Warehouse":
+        button_warehouse(values)
+    elif event == 'Offers':
+        button_view_offers(values) 
+    elif event == 'Assign':
+        button_assign(values) 
+    elif event == 'Change Area':
+        button_charger_area(values) 
+    elif event == 'Block':
+        button_block(values) 
+    elif event == 'YES':
+        button_yes(values) 
+    elif event == 'NO':
+        button_no(values) 
+    elif event == 'View Blocked Customers':
+        button_view_blocked(values) 
+    elif event == 'Unblock':
+        button_unblock(values) 
+    elif event == 'Order':
+        button_orderparts(values) 
+    elif event == 'Add Area':
+        button_add_area(values) 
+    elif event == 'Yes, add.':
+        button_area_yes(values) 
+    elif event == 'No, return.':
+        button_area_no(values) 
+    elif event == 'Add New Offers':
+        button_add_offers(values) 
+    elif event == 'Create Offer':
+        button_add_offercs(values) 
+    elif event == 'Add New Areas':
+        button_add_new_areas(values)
+    elif event == 'Return to Manager Page' :
+        button_return_manager(values)
+    
+    
+    elif event == 'Logout':
+        login_user_ssn = -1 
+        login_user_name = -1
+        login_user_type = -1
+        available_scooter = -1
+        available_offers = -1
+        sc_id = -1
+        ch_off_id = -1
+        available_new_batteries = -1
+        gl_bat_no = -1
+        choose_loc = -1
+        window.close()
+        window = window_login()
+    elif event == 'End Scooter':
+        button_ends(values)
+    elif event == sg.WIN_CLOSED or event == 'Exit':
+        break
+    
+    
+window.close()
+con.commit()
+con.close()
