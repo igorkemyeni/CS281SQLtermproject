@@ -2,12 +2,12 @@
 **Bilkent CS281 2021-2022 Fall Term Project**
 
 This project is a term project of six students:
-Merve Öztürk
-İsmail Görkem Yeni
-Bora Çetin
-Aysel Başa Bula
-Defne Tan
-Doruk Karakaş
+Merve Öztürk,
+İsmail Görkem Yeni,
+Bora Çetin,
+Aysel Başa Bula,
+Defne Tan,
+Doruk Karakaş.
 
 **Project Description**
 
