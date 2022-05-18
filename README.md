@@ -5,7 +5,7 @@ This project is a term project of six students:
 Merve Öztürk,
 İsmail Görkem Yeni,
 Bora Çetin,
-Aysel Başa Bula,
+Aysel Başak Bula,
 Defne Tan,
 Doruk Karakaş.
 
